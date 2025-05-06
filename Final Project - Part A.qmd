@@ -1,0 +1,82 @@
+---
+title: "Final Project | Part A"
+author: "Simone Haywood"
+date: last-modified
+subtitle: "Week Six"
+format: 
+   html:
+     df-print: paged
+     embed-resources: true
+---
+
+```{r, warning = F, message = F}
+library(tidyverse)
+project1 <- read_csv("Project1Data.csv")
+project1headers <- read_csv("Project1DataHeaders.csv")
+```
+
+### Tidy the Height Data
+
+```{r}
+projectft <- project1 %>% select(-4,-6,-8,-10,-12)
+colnames(projectft)[1] <- "CASEID"
+colnames(projectft)[2] <- "Sex"
+colnames(projectft)[3] <- "Height_2006"
+colnames(projectft)[4] <- "Height_2008"
+colnames(projectft)[5] <- "Height_2010"
+colnames(projectft)[6] <- "Height_2012"
+colnames(projectft)[7] <- "Height_2014"
+
+projectft <- projectft %>% 
+  pivot_longer(cols = 3:7, names_to = "Year",values_to = "Height(ft)") %>% mutate(Year = as.integer(str_extract(Year, "[0-9]+"))) 
+
+```
+
+```{r}
+projectin <- project1 %>% select(-3,-5,-7,-9,-11)
+colnames(projectin)[1] <- "CASEID"
+colnames(projectin)[2] <- "Sex"
+colnames(projectin)[3] <- "Height_2006"
+colnames(projectin)[4] <- "Height_2008"
+colnames(projectin)[5] <- "Height_2010"
+colnames(projectin)[6] <- "Height_2012"
+colnames(projectin)[7] <- "Height_2014"
+
+projectin <- projectin %>% 
+  pivot_longer(cols = 3:7, names_to = "Year",values_to = "Height(in)") %>% mutate(Year = as.integer(str_extract(Year, "[0-9]+"))) 
+```
+
+```{r}
+height_data_tidy <- inner_join(projectft,projectin, by=c("CASEID","Sex", "Year"))
+```
+
+### Clean the Height Data
+
+When cleaning the data decided on which negative values should be labeled as NA versus 0. Making this determination was based on 1) the missing values conventions and 2) if one column had a negative value and the other had positive values for example height in feet had negative but height in inches had a positive value. Determined to treat all refusals, invalid skips and non-interviews as NAs and valid skips and dont knows as 0. This prevented calculation errors (NA override) that would occur when converting the column height in feet to inches and combining with the height in inches column. After updating the missing values, converting the height in feet to inches, and finally combining both columns to get the total height in inches, reviewed the data to determine if any outliers that would impact the dataset. The original survey was conducted in 1979 and participants were ages 14-22, the assumption was made that they would be within a standard range for height for that age group. Given that context decided to set any value below 50 inches to NA and then set values above 84 to NA.
+
+```{r}
+navalues <- height_data_tidy %>%
+  mutate(across(c(`Height(ft)`, `Height(in)`), ~ ifelse(. %in% c(-1, -3, -5), NA, .)))
+
+zerovalues <- navalues %>%
+  mutate(across(c(`Height(ft)`, `Height(in)`), ~ ifelse(. %in% c(-2, -4), 0, .)))
+
+heightin <- zerovalues %>%
+  mutate(`Height(ft)` = `Height(ft)` * 12) %>% 
+  mutate(Height = `Height(ft)` + `Height(in)`,) %>% 
+  select(-4,-5) 
+
+height_data_tidy_cleaned <- heightin %>% 
+   mutate(`Height` = ifelse(`Height` > 80, NA, `Height`), 
+   Height = if_else(Height < 55, NA, Height))
+```
+
+### Visualize the Data
+
+```{r}
+ggplot(height_data_tidy_cleaned,
+  aes(x = Height, fill = Sex)
+) + geom_bar(na.rm = TRUE) + 
+    labs( x= "Height(in)", y="Count", title= "NLSY79 Longitudinal Survey - Height Data") + 
+  scale_x_continuous(breaks = seq(48, 84, 4))
+```
